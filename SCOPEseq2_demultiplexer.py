@@ -1,5 +1,6 @@
 #! /usr/bin/python
 import gzip
+import io
 
 # Enumerate HD=1 sequences for a given barcode sequence
 def enumerate_bc(bc):
@@ -38,10 +39,10 @@ def get_cbc_dict(bcs):
 	return cbc_dict	
 
 # Extract SCOPEseq2 cell barcodes (CBCs) and unique molecular identifiers (UMIs) for read 1 fastq
-def get_cbc_umi(first_bc,second_bc,read1):
+def get_cbc_umi(first_bc,second_bc,read1_fastq):
 	first_bc_dict = get_cbc_dict(first_bc)
 	second_bc_dict = get_cbc_dict(second_bc)
-	with gzip.open(read1,'rb') as f:
+	with io.BufferedReader(gzip.open(read1_fastq,'rb')) as f:
 		next(f)
 		cbcs = []
 		umis = []
