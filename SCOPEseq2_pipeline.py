@@ -35,7 +35,7 @@ demux_N = sum([1 for bc in cbcs if bc != '0']) # number of demultiplexed reads, 
 reads_N = len(cbcs) # number of reads
 demux_P = float(demux_N)/float(reads_N)*100. # percentage of reads demultiplexed
 
-print('Found %(demux_N)d reads with CBC/UNI out of %(reads_N)d reads or %(demux_P)f%% demultiplexed...' % vars())
+print('Found %(demux_N)d reads with CBC/UMI out of %(reads_N)d reads or %(demux_P)f%% demultiplexed...' % vars())
 
 ref = user_input.reference_dir
 gtf = user_input.gtf
@@ -45,7 +45,9 @@ fq2clip = user_input.data_dir+'/'+user_input.run_name+'_R2.clip.fastq.gz'
 bamfile = user_input.data_dir+'/'+user_input.run_name
 dist = user_input.overhang_distance
 
-clip = clipper(fq2file,fq2clip)
+clipped_N,total_N = clipper(fq2file,fq2clip)
+clipped_P = float(clipped_N)/float(total_N)
+print('Found %(clipped_N)d reads with poly(A) out of %(total_N)d reads or %(clipped_P)f%% clipped...' % vars())
 
 cmd = '/home/ubuntu/Software/STAR/bin/Linux_x86_64/STAR --readFilesCommand zcat --genomeDir %(ref)s --sjdbOverhang %(dist)s --sjdbGTFfile %(gtf)s --twopassMode Basic --runThreadN %(t)s --readFilesIn %(fq2clip)s --outFileNamePrefix %(bamfile)s --outSAMtype BAM Unsorted --outSAMunmapped Within' % vars()
 print('STAR command...')

@@ -6,6 +6,8 @@ import io
 def clipper(read2_fastq,read2_clipped_fastq):
 	i=0
 	polya = 'AAAAAAAA'
+	ct = 0
+	cta = 0
 	new=0
 	with gzip.open(read2_clipped_fastq, 'wb') as g:
 		with io.BufferedReader(gzip.open(read2_fastq,'rb')) as f:
@@ -14,6 +16,7 @@ def clipper(read2_fastq,read2_clipped_fastq):
 				if i == 1:
 					pa = dline.find(polya)
 					if pa!=-1:
+						cta+=1
 						if pa > 0:
 							newline = dline[0:pa]+'\n'
 						else:
@@ -38,5 +41,6 @@ def clipper(read2_fastq,read2_clipped_fastq):
 				if i == 4:
 					i = 0
 					new = 0
-	return 0	
+					ct+=1
+	return cta,ct
 
