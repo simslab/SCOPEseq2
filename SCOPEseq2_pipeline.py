@@ -2,6 +2,7 @@
 from SCOPEseq2_demultiplexer import get_cbc_umi
 from SCOPEseq2_clipper import clipper
 from SCOPEseq2_address import get_address
+from SCOPEseq2_addressct import addressct, umifilter
 import sys
 import numpy as np
 import matplotlib as mpl
@@ -49,15 +50,28 @@ clipped_N,total_N = clipper(fq2file,fq2clip)
 clipped_P = float(clipped_N)/float(total_N)*100.
 print('Found %(clipped_N)d reads with poly(A) out of %(total_N)d reads or %(clipped_P)f%% clipped...' % vars())
 
-cmd = '/home/ubuntu/Software/STAR/bin/Linux_x86_64/STAR --readFilesCommand zcat --genomeDir %(ref)s --sjdbOverhang %(dist)s --sjdbGTFfile %(gtf)s --twopassMode Basic --runThreadN %(t)s --readFilesIn %(fq2clip)s --outFileNamePrefix %(bamfile)s --outSAMtype BAM Unsorted --outSAMunmapped Within' % vars()
+cmd = '/home/ubuntu/Software/STAR/bin/Linux_x86_64/STAR --readFilesCommand zcat --genomeDir %(ref)s --sjdbOverhang %(dist)s --sjdbGTFfile %(gtf)s --twopassMode Basic --runThreadN %(t)s --readFilesIn %(fq2clip)s --outFileNamePrefix %(bamfile)s --outSAMtype BAM Unsorted' % vars()
 print('STAR command...')
 print(cmd)
-os.system(cmd)
+#os.system(cmd)
 
 bamfile = bamfile+'Aligned.out.bam'
 addressfile = user_input.data_dir+'/'+user_input.run_name+'.address.txt.gz'
 uniqalign_N,bam_N = get_address(gtf,bamfile,addressfile,barcode_dict)
 uniqalign_P = float(uniqalign_N)/float(bam_N)*100.
-print('Found %(uniqalign_N)d unique alignments out of %(bam_N)d reads or %(uniqalign_P)f%% uniquely aligned...' % vars())
+print('Found %(uniqalign_N)d unique gene alignments out of %(bam_N)d aligned reads or %(uniqalign_P)f%% uniquely aligned...' % vars())
 
+exon_addressct_file = user_input.data_dir+'/'+user_input.run_name+'.exon_address.cts.txt'
+gene_addressct_file = user_input.data_dir+'/'+user_input.run_name+'.gene_address.cts.txt'
+gene_molec_N,exon_molec_N = addressct(addressfile,gene_addressct_file,exon_addressct_file)
+print('Found %(gene_molec_N)d whole-gene molecules and %(exon_molec_N)d exonic molecules from %(uniqalign_N)d unique gene alignments...' % vars())
 
+exon_addressfilt_file = user_input.data_dir+'/'+user_input.run_name+'.exon_address.filt.txt'
+exon_filt_N,exon_init_N = umifilter(exon_addressct_file,exon_addressfilt_file)
+exon_filt_P = (1.0-float(exon_filt_N)/float(exon_init_N))*100.
+print('Found %(exon_filt_N)d exonic molecules after filtering %(exon_init_N)d unfiltered molecules for a filter rate of %(exon_filt_P)f...' % vars())
+
+gene_addressfilt_file = user_input.data_dir+'/'+user_input.run_name+'.gene_address.filt.txt'
+gene_filt_N,gene_init_N = umifilter(gene_addressct_file,gene_addressfilt_file)
+gene_filt_P = (1.0-float(gene_filt_N)/float(gene_init_N))*100.
+print('Found %(gene_filt_N)d whole-gene molecules after filtering %(gene_init_N)d unfiltered molecules for a filter rate of %(gene_filt_P)f...' % vars())
