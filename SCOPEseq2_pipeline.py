@@ -1,6 +1,7 @@
 #! /usr/bin/python
 from SCOPEseq2_demultiplexer import get_cbc_umi
 from SCOPEseq2_clipper import clipper
+from SCOPEseq2_address import get_address
 import sys
 import numpy as np
 import matplotlib as mpl
@@ -30,11 +31,10 @@ user_input = parser.parse_args()
 barcode1_list = [line.split()[0] for line in open(user_input.barcode1_infile)]
 barcode2_list = [line.split()[0] for line in open(user_input.barcode2_infile)]
 
-cbcs,umis = get_cbc_umi(barcode1_list,barcode2_list,user_input.read1_fastq) # get cell-identifying barcodes (CBCs) and unique molecular identifiers (UMIs)
-demux_N = sum([1 for bc in cbcs if bc != '0']) # number of demultiplexed reads, '0' indicates no CBC
-reads_N = len(cbcs) # number of reads
+barcode_dict = get_cbc_umi(barcode1_list,barcode2_list,user_input.read1_fastq) # get cell-identifying barcodes (CBCs) and unique molecular identifiers (UMIs)
+demux_N = sum([1 for readid in barcode_dict.keys() if barcode_dict[readid] != '0']) # number of demultiplexed reads, '0' indicates no CBC
+reads_N = len(barcode_dict.keys()) # number of reads
 demux_P = float(demux_N)/float(reads_N)*100. # percentage of reads demultiplexed
-
 print('Found %(demux_N)d reads with CBC/UMI out of %(reads_N)d reads or %(demux_P)f%% demultiplexed...' % vars())
 
 ref = user_input.reference_dir
@@ -42,14 +42,22 @@ gtf = user_input.gtf
 t = user_input.threads
 fq2file = user_input.read2_fastq
 fq2clip = user_input.data_dir+'/'+user_input.run_name+'_R2.clip.fastq.gz'
-bamfile = user_input.data_dir+'/'+user_input.run_name
+bamfile = user_input.data_dir+'/'+user_input.run_name+'.'
 dist = user_input.overhang_distance
 
 clipped_N,total_N = clipper(fq2file,fq2clip)
-clipped_P = float(clipped_N)/float(total_N)
+clipped_P = float(clipped_N)/float(total_N)*100.
 print('Found %(clipped_N)d reads with poly(A) out of %(total_N)d reads or %(clipped_P)f%% clipped...' % vars())
 
 cmd = '/home/ubuntu/Software/STAR/bin/Linux_x86_64/STAR --readFilesCommand zcat --genomeDir %(ref)s --sjdbOverhang %(dist)s --sjdbGTFfile %(gtf)s --twopassMode Basic --runThreadN %(t)s --readFilesIn %(fq2clip)s --outFileNamePrefix %(bamfile)s --outSAMtype BAM Unsorted --outSAMunmapped Within' % vars()
 print('STAR command...')
 print(cmd)
 os.system(cmd)
+
+bamfile = bamfile+'Aligned.out.bam'
+addressfile = user_input.data_dir+'/'+user_input.run_name+'.address.txt.gz'
+uniqalign_N,bam_N = get_address(gtf,bamfile,addressfile,barcode_dict)
+uniqalign_P = float(uniqalign_N)/float(bam_N)*100.
+print('Found %(uniqalign_N)d unique alignments out of %(bam_N)d reads or %(uniqalign_P)f%% uniquely aligned...' % vars())
+
+

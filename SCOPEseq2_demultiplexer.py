@@ -42,12 +42,15 @@ def get_cbc_dict(bcs):
 def get_cbc_umi(first_bc,second_bc,read1_fastq):
 	first_bc_dict = get_cbc_dict(first_bc)
 	second_bc_dict = get_cbc_dict(second_bc)
+	output_dict = {}
 	with io.BufferedReader(gzip.open(read1_fastq,'rb')) as f:
-		next(f)
 		cbcs = []
 		umis = []
-		for ct,line in enumerate(f,start=0):
-			if ct%4 == 0:
+		i=0
+		for line in f:
+			if i == 0:
+				readid = ':'.join(line.decode().split()[0].split(':')[3:7])
+			elif i == 1:
 				dline = line.decode()
 				bc1 = dline[2:10] # first 8-base barcode segment
 				if bc1 in first_bc_dict.keys():
@@ -57,16 +60,15 @@ def get_cbc_umi(first_bc,second_bc,read1_fastq):
 						bc2 = second_bc_dict[bc2] 
 						umi = dline[0:2]+dline[10:12]+dline[20:24] # 8-base UMI in 2x2-base and 1x4-base blocks
 						if umi.find('N') == -1:
-							cbcs.append(bc1+bc2)
-							umis.append(umi)
+							output_dict[readid] = bc1+bc2+umi
 						else:
-							cbcs.append('0')
-							umis.append('0')
+							output_dict[readid] = '0'
 					else:
-						cbcs.append('0')
-						umis.append('0')
+						output_dict[readid] = '0'
 				else:
-					cbcs.append('0')
-					umis.append('0')
-	return cbcs,umis
+					output_dict[readid] = '0'
+			i+=1
+			if i==4:
+				i=0
+	return output_dict 
 						
