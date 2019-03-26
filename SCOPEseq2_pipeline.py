@@ -53,7 +53,7 @@ print('Found %(clipped_N)d reads with poly(A) out of %(total_N)d reads or %(clip
 cmd = '/home/ubuntu/Software/STAR/bin/Linux_x86_64/STAR --readFilesCommand zcat --genomeDir %(ref)s --sjdbOverhang %(dist)s --sjdbGTFfile %(gtf)s --twopassMode Basic --runThreadN %(t)s --readFilesIn %(fq2clip)s --outFileNamePrefix %(bamfile)s --outSAMtype BAM Unsorted' % vars()
 print('STAR command...')
 print(cmd)
-#os.system(cmd)
+os.system(cmd)
 
 bamfile = bamfile+'Aligned.out.bam'
 addressfile = user_input.data_dir+'/'+user_input.run_name+'.address.txt.gz'
