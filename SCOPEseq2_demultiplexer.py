@@ -1,6 +1,28 @@
 #! /usr/bin/python
 import gzip
 import io
+from sys import getsizeof
+import numpy as np
+
+def get_size(obj, seen=None):
+	"""Recursively finds size of objects"""
+	size = getsizeof(obj)
+	if seen is None:
+		seen = set()
+	obj_id = id(obj)
+	if obj_id in seen:
+		return 0
+	# Important mark as seen *before* entering recursion to gracefully handle
+	# self-referential objects
+	seen.add(obj_id)
+	if isinstance(obj, dict):
+		size += sum([get_size(v, seen) for v in obj.values()])
+		size += sum([get_size(k, seen) for k in obj.keys()])
+	elif hasattr(obj, '__dict__'):
+		size += get_size(obj.__dict__, seen)
+	elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
+		size += sum([get_size(i, seen) for i in obj])
+	return size
 
 # Enumerate HD=1 sequences for a given barcode sequence
 def enumerate_bc(bc):
@@ -11,64 +33,85 @@ def enumerate_bc(bc):
 		bc2=''
 		bc3=''
 		bc4=''
+		bc5=''
 		for j in range(N):
 			if i==j:
 				bc1+='A'
 				bc2+='G'
 				bc3+='C'
 				bc4+='T'
+				bc5+='N'
 			else:
 				bc1+=bc[j]
 				bc2+=bc[j]
 				bc3+=bc[j]
 				bc4+=bc[j]
+				bc5+=bc[j]
 		bcs.append(bc1)
 		bcs.append(bc2)
 		bcs.append(bc3)
 		bcs.append(bc4)	
+		bcs.append(bc5)
 	bcs = list(set(bcs))
 	return bcs
 
 # Generate dictionary linking HD=1 sequences (keys) to correct barcode (values)
 def get_cbc_dict(bcs):
 	cbc_dict = {}
-	for bc in bcs:
+	for bc,i in zip(bcs,range(len(bcs))):
 		allbcs = enumerate_bc(bc)
 		for allbc in allbcs:
-			cbc_dict[allbc] = bc
+			cbc_dict[allbc] = i
 	return cbc_dict	
 
 # Extract SCOPEseq2 cell barcodes (CBCs) and unique molecular identifiers (UMIs) for read 1 fastq
-def get_cbc_umi(first_bc,second_bc,read1_fastq):
+def get_cbc_umi(first_bc,second_bc,index_bc,read1_fastq,reads):
 	first_bc_dict = get_cbc_dict(first_bc)
 	second_bc_dict = get_cbc_dict(second_bc)
-	output_dict = {}
+	index_bc_dict = get_cbc_dict(index_bc)
+	j=-1
 	with io.BufferedReader(gzip.open(read1_fastq,'rb')) as f:
-		cbcs = []
-		umis = []
+		readids = np.empty(reads,dtype=np.object_)
+		barcodes = np.empty(reads,dtype=np.object_)
 		i=0
 		for line in f:
 			if i == 0:
-				readid = ':'.join(line.decode().split()[0].split(':')[3:7])
-			elif i == 1:
-				dline = line.decode()
-				bc1 = dline[2:10] # first 8-base barcode segment
-				if bc1 in first_bc_dict.keys():
-					bc1 = first_bc_dict[bc1]
-					bc2 = dline[12:20] # second 8-base barcode segment
-					if bc2 in second_bc_dict.keys():
-						bc2 = second_bc_dict[bc2] 
-						umi = dline[0:2]+dline[10:12]+dline[20:24] # 8-base UMI in 2x2-base and 1x4-base blocks
-						if umi.find('N') == -1:
-							output_dict[readid] = bc1+bc2+umi
-						else:
-							output_dict[readid] = '0'
-					else:
-						output_dict[readid] = '0'
+				j+=1
+				dlist = line.decode().split()
+				readid = ':'.join(dlist[0].split(':')[3:7])
+				index = dlist[1].split(':')[3]
+				if index in index_bc_dict.keys():
+					index = index_bc_dict[index]
 				else:
-					output_dict[readid] = '0'
+					index = '0'
+		#		readids.append(readid)
+				readids[j] = readid
+			elif i == 1:
+				if index != '0':
+					dline = line.decode()
+					bc1 = dline[2:10] # first 8-base barcode segment
+					if bc1 in first_bc_dict.keys():
+						bc1 = first_bc_dict[bc1]
+						bc2 = dline[12:20] # second 8-base barcode segment
+						if bc2 in second_bc_dict.keys():
+							bc2 = second_bc_dict[bc2] 
+							umi = dline[0:2]+dline[10:12]+dline[20:24] # 8-base UMI in 2x2-base and 1x4-base blocks
+							if umi.find('N') == -1:
+								barcode = str(index)+'_'+str(bc1)+'_'+str(bc2)+'_'+umi
+								barcodes[j] = barcode
+							else:	
+								#print(float(j)/1.e6)	
+							#	print(float(j)/1.0e6,float(get_size(readids))/1.e6,float(get_size(barcodes))/1.e6)
+								barcodes[j]='0'
+						else:
+							barcodes[j]='0'
+					else:
+						barcodes[j] = '0'
+				else:
+				#	barcodes.append('0')
+					barcodes[j] = '0'
 			i+=1
 			if i==4:
 				i=0
-	return output_dict 
+	return readids,barcodes 
 						
