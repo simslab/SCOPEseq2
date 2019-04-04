@@ -65,53 +65,50 @@ def get_cbc_dict(bcs):
 	return cbc_dict	
 
 # Extract SCOPEseq2 cell barcodes (CBCs) and unique molecular identifiers (UMIs) for read 1 fastq
-def get_cbc_umi(first_bc,second_bc,index_bc,read1_fastq,reads):
+def get_cbc_umi(first_bc,second_bc,index_bc,read1_fastq,demux_file):
 	first_bc_dict = get_cbc_dict(first_bc)
 	second_bc_dict = get_cbc_dict(second_bc)
 	index_bc_dict = get_cbc_dict(index_bc)
-	j=-1
-	with io.BufferedReader(gzip.open(read1_fastq,'rb')) as f:
-		readids = np.empty(reads,dtype=np.object_)
-		barcodes = np.empty(reads,dtype=np.object_)
-		i=0
-		for line in f:
-			if i == 0:
-				j+=1
-				dlist = line.decode().split()
-				readid = ':'.join(dlist[0].split(':')[3:7])
-				index = dlist[1].split(':')[3]
-				if index in index_bc_dict.keys():
-					index = index_bc_dict[index]
-				else:
-					index = '0'
-		#		readids.append(readid)
-				readids[j] = readid
-			elif i == 1:
-				if index != '0':
-					dline = line.decode()
-					bc1 = dline[2:10] # first 8-base barcode segment
-					if bc1 in first_bc_dict.keys():
-						bc1 = first_bc_dict[bc1]
-						bc2 = dline[12:20] # second 8-base barcode segment
-						if bc2 in second_bc_dict.keys():
-							bc2 = second_bc_dict[bc2] 
-							umi = dline[0:2]+dline[10:12]+dline[20:24] # 8-base UMI in 2x2-base and 1x4-base blocks
-							if umi.find('N') == -1:
-								barcode = str(index)+'_'+str(bc1)+'_'+str(bc2)+'_'+umi
-								barcodes[j] = barcode
-							else:	
-								#print(float(j)/1.e6)	
-							#	print(float(j)/1.0e6,float(get_size(readids))/1.e6,float(get_size(barcodes))/1.e6)
-								barcodes[j]='0'
-						else:
-							barcodes[j]='0'
+	productive=0
+	total=0
+	with open(demux_file,'w') as g:
+		with io.BufferedReader(gzip.open(read1_fastq,'rb')) as f:
+			i=0
+			for line in f:
+				if i == 0:
+					dlist = line.decode().split()
+					readid = ':'.join(dlist[0].split(':')[3:7])
+					index = dlist[1].split(':')[3]
+					if index in index_bc_dict.keys():
+						index = index_bc_dict[index]
 					else:
-						barcodes[j] = '0'
-				else:
-				#	barcodes.append('0')
-					barcodes[j] = '0'
-			i+=1
-			if i==4:
-				i=0
-	return readids,barcodes 
+						index = '-1'
+				elif i == 1:
+					if index != '-1':
+						dline = line.decode()
+						bc1 = dline[2:10] # first 8-base barcode segment
+						if bc1 in first_bc_dict.keys():
+							bc1 = first_bc_dict[bc1]
+							bc2 = dline[12:20] # second 8-base barcode segment
+							if bc2 in second_bc_dict.keys():
+								bc2 = second_bc_dict[bc2] 
+								umi = dline[0:2]+dline[10:12]+dline[20:24] # 8-base UMI in 2x2-base and 1x4-base blocks
+								if umi.find('N') == -1:
+									barcode = str(index)+'_'+str(bc1)+'_'+str(bc2)+'_'+umi
+									productive+=1
+								else:	
+									barcode='-1'
+							else:
+								barcode='-1'
+						else:
+							barcode = '-1'
+					else:
+						barcode = '-1'
+				i+=1
+				if i==4:
+					i=0
+					st = readid+'\t'+barcode+'\n'
+					g.write(st)
+					total+=1
+	return productive,total
 						

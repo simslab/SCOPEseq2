@@ -25,7 +25,6 @@ def parse_user_input():
 	parser.add_argument('-gtf','--gtf',required=True,help='Path to transcriptome annotation gtf file for STAR.')
 	parser.add_argument('-dist','--overhang_distance',default=65,help='Sets the sjdbOverhang parameter for STAR.')
 	parser.add_argument('-t','--threads',default=1,help='Sets the number of threads for STAR and samtools.')
-	parser.add_argument('-n','--number-of-reads',required=True,help='Number of raw reads in the data (single-end).')
 	return parser
 
 parser = parse_user_input()
@@ -39,48 +38,37 @@ index_list = [line.split()[0] for line in open(user_input.index_infile)]
 logfile = user_input.data_dir+'/'+user_input.run_name+'.log'
 log = open(logfile,'w')
 
-readids,barcodes = get_cbc_umi(barcode1_list,barcode2_list,index_list,user_input.read1_fastq,int(user_input.number_of_reads)) # get cell-identifying barcodes (CBCs) and unique molecular identifiers (UMIs)
-demux_N = sum([1 for bc in barcodes if bc != '0']) # number of demultiplexed reads, '0' indicates no CBC
-reads_N = len(barcodes) # number of reads
+demux_file =  user_input.data_dir+'/'+user_input.run_name+'.demux.txt'
+demux_N,reads_N = get_cbc_umi(barcode1_list,barcode2_list,index_list,user_input.read1_fastq,demux_file) # get cell-identifying barcodes (CBCs) and unique molecular identifiers (UMIs)
 demux_P = float(demux_N)/float(reads_N)*100. # percentage of reads demultiplexed
 print('Found %(demux_N)d reads with CBC/UMI out of %(reads_N)d reads or %(demux_P)f%% demultiplexed...' % vars())
 log.write('Found %(demux_N)d reads with CBC/UMI out of %(reads_N)d reads or %(demux_P)f%% demultiplexed.\n' % vars())
-
-ind = np.argsort(readids)
-del readids
-barcodes = barcodes[ind]
 
 ref = user_input.reference_dir
 gtf = user_input.gtf
 t = user_input.threads
 fq2file = user_input.read2_fastq
-fq2clip = user_input.data_dir+'/'+user_input.run_name+'_R2.clip.fastq.gz'
+fq2clip = user_input.data_dir+'/'+user_input.run_name+'_R2.clip.fastq.bz2'
 bamfile = user_input.data_dir+'/'+user_input.run_name+'.'
 dist = user_input.overhang_distance
 
+cmd = 'zcat %(fq2file)s | ./SCOPEseq2_clipper | pbzip2 -c > %(fq2clip)s' % vars()
+print(cmd)
+os.system(cmd)
 clipped_N,total_N = clipper(fq2file,fq2clip)
 clipped_P = float(clipped_N)/float(total_N)*100.
 print('Found %(clipped_N)d reads with poly(A) out of %(total_N)d reads or %(clipped_P)f%% clipped...' % vars())
 log.write('Found %(clipped_N)d reads with poly(A) out of %(total_N)d reads or %(clipped_P)f%% clipped.\n' % vars())
 
 
-cmd = '/home/ubuntu/Software/STAR/bin/Linux_x86_64/STAR --readFilesCommand zcat --genomeDir %(ref)s --sjdbOverhang %(dist)s --sjdbGTFfile %(gtf)s --twopassMode Basic --runThreadN %(t)s --readFilesIn %(fq2clip)s --outFileNamePrefix %(bamfile)s --outSAMtype BAM Unsorted --outSAMunmapped Within' % vars()
+cmd = '/home/ubuntu/Software/STAR/bin/Linux_x86_64/STAR --readFilesCommand pbzip2 -d -c --genomeDir %(ref)s --sjdbOverhang %(dist)s --sjdbGTFfile %(gtf)s --twopassMode Basic --runThreadN %(t)s --readFilesIn %(fq2clip)s --outFileNamePrefix %(bamfile)s --outSAMtype BAM Unsorted' % vars()
 print('STAR command...')
 print(cmd)
 os.system(cmd)
 
-cmd = 'java -jar ~/Software/picard.jar SortSam I=%(bamfile)sAligned.out.bam O=%(bamfile)sAligned.out.sort.bam SORT_ORDER=queryname' % vars()
-print('Picard command...')
-print(cmd)
-os.system(cmd)
-
-cmd = 'rm %(bamfile)sAligned.out.bam' % vars()
-print(cmd)
-os.system(cmd)
-
-bamfile = bamfile+'Aligned.out.sort.bam'
+bamfile = bamfile+'Aligned.out.bam'
 addressfile = user_input.data_dir+'/'+user_input.run_name+'.address.txt.gz'
-uniqalign_N,bam_N = get_address(gtf,bamfile,addressfile,barcodes)
+uniqalign_N,bam_N = get_address(gtf,bamfile,addressfile,demux_file)
 uniqalign_P = float(uniqalign_N)/float(bam_N)*100.
 print('Found %(uniqalign_N)d unique gene alignments out of %(bam_N)d aligned reads or %(uniqalign_P)f%% uniquely aligned...' % vars())
 log.write('Found %(uniqalign_N)d unique gene alignments out of %(bam_N)d aligned reads or %(uniqalign_P)f%% uniquely aligned.\n' % vars())
@@ -95,13 +83,13 @@ log.write('Found %(gene_molec_N)d whole-gene molecules and %(exon_molec_N)d exon
 exon_addressfilt_file = user_input.data_dir+'/'+user_input.run_name+'.exon_address.filt.txt'
 exon_filt_N,exon_init_N = umifilter(exon_addressct_file,exon_addressfilt_file)
 exon_filt_P = (1.0-float(exon_filt_N)/float(exon_init_N))*100.
-print('Found %(exon_filt_N)d exonic molecules after filtering %(exon_init_N)d unfiltered molecules for a filter rate of %(exon_filt_P)f...' % vars())
-log.write('Found %(exon_filt_N)d exonic molecules after filtering %(exon_init_N)d unfiltered molecules for a filter rate of %(exon_filt_P)f.\n' % vars())
+print('Found %(exon_filt_N)d exonic molecules after filtering %(exon_init_N)d unfiltered molecules for a filter rate of %(exon_filt_P)f%%...' % vars())
+log.write('Found %(exon_filt_N)d exonic molecules after filtering %(exon_init_N)d unfiltered molecules for a filter rate of %(exon_filt_P)f%%.\n' % vars())
 
 gene_addressfilt_file = user_input.data_dir+'/'+user_input.run_name+'.gene_address.filt.txt'
 gene_filt_N,gene_init_N = umifilter(gene_addressct_file,gene_addressfilt_file)
 gene_filt_P = (1.0-float(gene_filt_N)/float(gene_init_N))*100.
-print('Found %(gene_filt_N)d whole-gene molecules after filtering %(gene_init_N)d unfiltered molecules for a filter rate of %(gene_filt_P)f...' % vars())
-log.write('Found %(gene_filt_N)d whole-gene molecules after filtering %(gene_init_N)d unfiltered molecules for a filter rate of %(gene_filt_P)f.' % vars())
+print('Found %(gene_filt_N)d whole-gene molecules after filtering %(gene_init_N)d unfiltered molecules for a filter rate of %(gene_filt_P)f%%...' % vars())
+log.write('Found %(gene_filt_N)d whole-gene molecules after filtering %(gene_init_N)d unfiltered molecules for a filter rate of %(gene_filt_P)f%%\n.' % vars())
 
 log.close()

@@ -16,7 +16,7 @@ def get_interval_tree_for_chromosome(gtf, chrm):
 	return tree_dict
 
 
-def get_address(gtfile,bamfile,addressfile,barcodes):
+def get_address(gtfile,bamfile,addressfile,demux_file):
 	# For both the + and - strands, there is a default dictionary in the gtf metadictionary with chromosome names as keys and values
 	# that are lists of tuples (gene_id, left coordinate, right coordinate) indicate gene regions on that chromosome and strand.
 	genegtf = {'+':defaultdict(list),'-':defaultdict(list)} # whole-gene metadictionary keyed by '+' and '-' (indicating strand)
@@ -47,6 +47,14 @@ def get_address(gtfile,bamfile,addressfile,barcodes):
 	store_mm_gene = {}
 	store_mm_exon = {}
 
+	barcode_dict = {}
+	with open(demux_file) as f:
+		for line in f:
+			llist = line.split()
+			bc = llist[1]
+			if bc != '-1':
+				barcode_dict[llist[0]] = bc	
+
 	i = 0 
 	j = 0
 	cts = 0
@@ -55,11 +63,8 @@ def get_address(gtfile,bamfile,addressfile,barcodes):
 		with AlignmentFile(bamfile,'rb') as f:
 			for read in f:
 				readid = ':'.join(read.qname.split(':')[3:7])
-				if readid != old_readid:
-					bc = barcodes[j].split('_')
-					old_readid = readid
-					j+=1
-				if bc != ['0']:
+				if readid in barcode_dict.keys():
+					bc = barcode_dict[readid].split('_')
 					cellbc = '_'.join(bc[0:3])
 					umi = bc[3]
 					ch = f.getrname(read.reference_id)
